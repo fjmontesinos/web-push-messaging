@@ -21,7 +21,7 @@
 
 'use strict';
 
-const applicationServerPublicKey = '<Your Public Key>';
+const applicationServerPublicKey = 'BOdZUIc_VU-luAjMReWJ3yRS7573rCoh0RMT88euPcDoy10DxAK3Uu1wrHxGFDS5a4uTCRBufrfunTS7uxdj-6Q';
 
 const pushButton = document.querySelector('.js-push-btn');
 
@@ -42,3 +42,128 @@ function urlB64ToUint8Array(base64String) {
   }
   return outputArray;
 }
+
+// Registrar el service worker
+if ('serviceWorker' in navigator && 'PushManager' in window) {
+  console.log('Service Worker and Push is supported');
+
+  navigator.serviceWorker.register('sw.js')
+  .then(function(swReg) {
+    console.log('Service Worker is registered', swReg);
+
+    swRegistration = swReg;
+
+    // Una vez registrado el service worker activamos o no el botón de suscripción
+    initialiseUI();
+  })
+  .catch(function(error) {
+    console.error('Service Worker Error', error);
+  });
+} else {
+  console.warn('Push messaging is not supported');
+  pushButton.textContent = 'Push Not Supported';
+}
+
+// Verificar si el usuario está suscrito al service worker
+function initialiseUI() {
+  pushButton.addEventListener('click', function() {
+    pushButton.disabled = true;
+    if (isSubscribed) {
+      unsubscribeUser();
+    } else {
+      subscribeUser();
+    }
+  });
+
+  // Set the initial subscription value
+  swRegistration.pushManager.getSubscription()
+  .then(function(subscription) {
+    isSubscribed = !(subscription === null);
+
+    if (isSubscribed) {
+      console.log('User IS subscribed.');
+    } else {
+      console.log('User is NOT subscribed.');
+    }
+
+    updateBtn();
+  });
+}
+
+// actualizar el botón si el usuario está suscrito al service worker
+function updateBtn() {
+  if (Notification.permission === 'denied') {
+    pushButton.textContent = 'Push Messaging Blocked.';
+    pushButton.disabled = true;
+    updateSubscriptionOnServer(null);
+    return;
+  }
+
+  if (isSubscribed) {
+    pushButton.textContent = 'Disable Push Messaging';
+  } else {
+    pushButton.textContent = 'Enable Push Messaging';
+  }
+
+  pushButton.disabled = false;
+}
+
+// Suscribir al usuario
+function subscribeUser() {
+  const applicationServerKey = urlB64ToUint8Array(applicationServerPublicKey);
+
+  swRegistration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: applicationServerKey
+  })
+  .then(function(subscription) {
+    console.log('User is subscribed:', subscription);
+
+    updateSubscriptionOnServer(subscription);
+
+    isSubscribed = true;
+
+    updateBtn();
+  })
+  .catch(function(err) {
+    console.log('Failed to subscribe the user: ', err);
+    updateBtn();
+  });
+}
+
+function updateSubscriptionOnServer(subscription) {
+  // TODO: Send subscription to application server
+
+  const subscriptionJson = document.querySelector('.js-subscription-json');
+  const subscriptionDetails =
+    document.querySelector('.js-subscription-details');
+
+  if (subscription) {
+    subscriptionJson.textContent = JSON.stringify(subscription);
+    subscriptionDetails.classList.remove('is-invisible');
+  } else {
+    subscriptionDetails.classList.add('is-invisible');
+  }
+}
+
+function unsubscribeUser() {
+  swRegistration.pushManager.getSubscription()
+  .then(function(subscription) {
+    if (subscription) {
+      return subscription.unsubscribe();
+    }
+  })
+  .catch(function(error) {
+    console.log('Error unsubscribing', error);
+  })
+  .then(function() {
+    updateSubscriptionOnServer(null);
+
+    console.log('User is unsubscribed.');
+    isSubscribed = false;
+
+    updateBtn();
+  });
+}
+
+
